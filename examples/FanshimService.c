@@ -26,10 +26,13 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <signal.h>
+#include <string.h>
 #include <unistd.h>
 #include <RaspiAPA102/APA102.h>
 #include <RaspiAPA102/ColorConversion.h>
 #include <RaspiFanshim/Fanshim.h>
+
 
 /* ============================================================================================== */
 /* Internal Functions                                                                             */
@@ -93,6 +96,19 @@ static void UpdateFanshimLED(double hue, uint8_t brightness)
         brightness);
 }
 
+
+static volatile int keepRunning = 1;
+
+/**
+ * @brief   Catches the sigterm signals to turn off led before leaving.
+ *
+ * @param   signum  Signal number
+ */
+void SignalHandler(int signum)
+{
+     keepRunning = 0;
+}
+
 /* ============================================================================================== */
 /* Entry Point                                                                                    */
 /* ============================================================================================== */
@@ -112,13 +128,13 @@ int main(void)
     // The temperature threshold for the fan to stop 
     const double threshold_temp_lo = 50.0f;
     // The LED brightness
-    const uint8_t led_brightness = 8;
+    const uint8_t led_brightness = 1;
     // The low temperature color
     const RaspiAPA102RGB color_temp_lo_rgb = 
     {
           0 / 255, 
-        255 / 255,
-          0 / 255
+          0 / 255,
+        255 / 255
     };
     // The high temperature color
     const RaspiAPA102RGB color_temp_hi_rgb = 
@@ -148,8 +164,11 @@ int main(void)
     double hue_value_last = hue_delta_total * factor;
     UpdateFanshimLED(hue_base + hue_value_last, led_brightness);
 
+    signal(SIGINT, SignalHandler);
+    signal(SIGTERM, SignalHandler);
+
     int measure_count = 0;
-    while (true)
+    while (keepRunning)
     {
         const double temp = ReadCPUTemperature();
 
@@ -200,6 +219,9 @@ int main(void)
 
         hue_value_last = hue_value_target;
     }
+
+    RaspiFanshimUpdateLED(0, 0, 0, 0);
+    RaspiFanshimEnableFan(true);
 
     return 0;
 }
